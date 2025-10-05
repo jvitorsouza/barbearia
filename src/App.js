@@ -311,7 +311,7 @@ const AdminLoginPage = ({ onLoginSuccess }) => {
 const AdminPage = ({ barbers, onAddBarber, onDeleteBarber, serviceTypes, onAddServiceType, onDeleteServiceType, onLogout }) => {
     const [barberName, setBarberName] = useState('');
     const [pixKey, setPixKey] = useState('');
-    const [pixQRCodeUrl, setPixQRCodeUrl] = useState('');
+    const [pixQRCodeFilename, setPixQRCodeFilename] = useState('');
     const [serviceName, setServiceName] = useState('');
     const [servicePrice, setServicePrice] = useState('');
 
@@ -321,11 +321,11 @@ const AdminPage = ({ barbers, onAddBarber, onDeleteBarber, serviceTypes, onAddSe
             onAddBarber({
                 name: barberName.trim(),
                 pixKey: pixKey.trim(),
-                pixQRCodeUrl: pixQRCodeUrl.trim()
+                pixQRCodeFilename: pixQRCodeFilename.trim()
             });
             setBarberName('');
             setPixKey('');
-            setPixQRCodeUrl('');
+            setPixQRCodeFilename('');
         }
     };
 
@@ -345,7 +345,7 @@ const AdminPage = ({ barbers, onAddBarber, onDeleteBarber, serviceTypes, onAddSe
                     <form onSubmit={handleAddBarberSubmit} className="space-y-3 mb-6">
                         <input type="text" value={barberName} onChange={e => setBarberName(e.target.value)} placeholder="Nome do Barbeiro" className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500" required />
                         <input type="text" value={pixKey} onChange={e => setPixKey(e.target.value)} placeholder="Chave PIX (Copia e Cola)" className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500" />
-                        <input type="url" value={pixQRCodeUrl} onChange={e => setPixQRCodeUrl(e.target.value)} placeholder="Link da Imagem do QR Code" className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500" />
+                        <input type="text" value={pixQRCodeFilename} onChange={e => setPixQRCodeFilename(e.target.value)} placeholder="Nome do Ficheiro QR (ex: vitor.png)" className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500" />
                         <button type="submit" className="w-full bg-slate-800 text-white font-semibold px-4 py-2 rounded-lg hover:bg-slate-900 shadow">Adicionar Barbeiro</button>
                     </form>
                     <div className="space-y-2">
@@ -506,7 +506,7 @@ const PixQRCodeModal = ({ isOpen, onClose, onConfirm, orderData }) => {
                 </div>
                 
                 {barber.pixQRCodeUrl ? (
-                    <img src={barber.pixQRCodeUrl} alt="PIX QR Code" className="mx-auto mb-4 border rounded-lg w-48 h-48 object-contain" />
+                    <img src={process.env.PUBLIC_URL + barber.pixQRCodeUrl} alt="PIX QR Code" className="mx-auto mb-4 border rounded-lg w-48 h-48 object-contain" />
                 ) : (
                     <div className="mx-auto mb-4 border rounded-lg w-48 h-48 bg-slate-100 flex items-center justify-center text-center text-sm text-slate-500 p-4">
                         Imagem do QR Code não disponível.
@@ -611,11 +611,11 @@ export default function App() {
 
     const handleAddBarber = async (barberData) => {
         if (!barbersCollectionRef) return;
-        const { name, pixKey, pixQRCodeUrl } = barberData;
+        const { name, pixKey, pixQRCodeFilename } = barberData;
         const newBarber = {
             name,
             pixKey,
-            pixQRCodeUrl,
+            pixQRCodeUrl: pixQRCodeFilename ? `/qrcodes/${pixQRCodeFilename}` : '',
             createdAt: Timestamp.now()
         };
         try {
