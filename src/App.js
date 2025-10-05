@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 // Importações do Firebase
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, query, where, Timestamp, getDocs, doc, deleteDoc, setLogLevel } from 'firebase/firestore';
 
 // --- Configuração do Firebase ---
@@ -40,6 +40,79 @@ const LogoutIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" className="h-5
 
 // --- Componentes da UI ---
 const formatCurrency = (value) => (typeof value === 'number') ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+
+const AuthPage = ({ onAuthSuccess }) => {
+    const [isLogin, setIsLogin] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        try {
+            if (isLogin) {
+                await signInWithEmailAndPassword(auth, email, password);
+            } else {
+                await createUserWithEmailAndPassword(auth, email, password);
+            }
+            // onAuthSuccess será chamado pelo listener onAuthStateChanged
+        } catch (err) {
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+    
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-slate-50">
+            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg">
+                <div className="text-center">
+                    <div className="flex justify-center items-center mb-4">
+                        <BarberIcon />
+                        <h1 className="text-3xl font-bold text-slate-900">Barbers Brothers</h1>
+                    </div>
+                    <p className="text-slate-600">{isLogin ? 'Faça login para continuar' : 'Crie a sua conta'}</p>
+                </div>
+                <form onSubmit={handleAuth} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Email</label>
+                        <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Palavra-passe</label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500"
+                            required
+                        />
+                    </div>
+                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                    <button type="submit" disabled={loading} className="w-full bg-slate-800 text-white font-bold py-2.5 rounded-lg hover:bg-slate-900 transition shadow-md disabled:bg-slate-400">
+                        {loading ? 'Aguarde...' : (isLogin ? 'Entrar' : 'Registar')}
+                    </button>
+                </form>
+                <p className="text-sm text-center text-slate-600">
+                    {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}
+                    <button onClick={() => setIsLogin(!isLogin)} className="font-semibold text-slate-800 hover:underline ml-1">
+                        {isLogin ? 'Registe-se' : 'Faça login'}
+                    </button>
+                </p>
+            </div>
+        </div>
+    );
+};
+
 
 const Header = () => ( <header className="text-center mb-8">
     <div className="flex justify-center items-center">
@@ -499,16 +572,8 @@ export default function App() {
             try {
                 await setPersistence(auth, browserLocalPersistence);
                 const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-                    if (currentUser) {
-                        setUser(currentUser);
-                        setLoading(false);
-                    } else {
-                        signInAnonymously(auth).catch((signInError) => {
-                            console.error("Erro no login anónimo:", signInError);
-                            setError("Falha ao iniciar sessão anónima.");
-                            setLoading(false);
-                        });
-                    }
+                    setUser(currentUser);
+                    setLoading(false);
                 });
                 return unsubscribe;
             } catch (e) {
@@ -572,11 +637,14 @@ export default function App() {
         if(serviceTypesCollectionRef) await deleteDoc(doc(serviceTypesCollectionRef, id)); 
     };
     
-    const handleRegisterOrder = async (orderData) => {
-        if (!orderData) return;
-        const { barber, services, clearDashboard } = orderData;
-        if (!servicesCollectionRef || !barber?.id || services.length === 0) return;
-        
+    const handleRegisterOrder = async () => {
+        if (!pixModalData) return;
+        const { barber, services, clearDashboard } = pixModalData;
+        if (!servicesCollectionRef || !barber?.id || services.length === 0) {
+            setPixModalData(null);
+            return;
+        };
+
         const timestamp = Timestamp.now();
         const registrationPromises = services.map(service => 
             addDoc(servicesCollectionRef, {
@@ -588,14 +656,25 @@ export default function App() {
         );
         try {
             await Promise.all(registrationPromises);
-            clearDashboard();
+            if(clearDashboard) clearDashboard();
         } catch (error) { 
             console.error("Erro ao registrar serviço da comanda:", error);
+        } finally {
+            setPixModalData(null); 
         }
     };
 
     const handleOpenPixModal = (orderData, clearDashboardCallback) => {
         setPixModalData({ ...orderData, clearDashboard: clearDashboardCallback });
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            // O onAuthStateChanged irá atualizar o estado do user para null
+        } catch (error) {
+            console.error("Erro ao fazer logout:", error);
+        }
     };
 
     const renderPage = () => {
@@ -633,6 +712,10 @@ export default function App() {
         </div>;
     }
 
+    if (!user) {
+        return <AuthPage />;
+    }
+
     return (
         <div className="bg-slate-50 min-h-screen text-slate-800">
             <div className="container mx-auto p-4 md:p-8 max-w-7xl">
@@ -642,15 +725,17 @@ export default function App() {
                  <PixQRCodeModal 
                     isOpen={!!pixModalData}
                     onClose={() => setPixModalData(null)}
-                    onConfirm={async () => {
-                        await handleRegisterOrder(pixModalData);
-                        setPixModalData(null);
-                    }}
+                    onConfirm={handleRegisterOrder}
                     orderData={pixModalData}
                  />
                  <footer className="text-center mt-8 text-sm text-slate-500">
                     <p>App Gerenciador de Barbearia &copy; 2024</p>
-                    {user && <p className="mt-2">ID do Usuário: <span className="font-mono text-xs">{user.uid}</span></p>}
+                    {user && (
+                        <div className="mt-2">
+                             <p>ID do Utilizador: <span className="font-mono text-xs">{user.uid}</span></p>
+                             <button onClick={handleLogout} className="text-red-500 hover:underline mt-1">Sair</button>
+                        </div>
+                    )}
                 </footer>
             </div>
         </div>
